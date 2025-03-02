@@ -1,9 +1,7 @@
-
-Flask==2.1.1
+Flask==2.2.2
 Flask-WTF==1.0.1
 Flask-MySQLdb==1.0.1
 bcrypt==4.0.1
 requests==2.26.0
 pytest==8.3.5
-Werkzeug==2.1.2
-
+Werkzeug==2.1.2  # This version is compatible with Flask 2.x

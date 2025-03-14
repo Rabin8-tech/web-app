@@ -2,16 +2,17 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Login</title>
+    <title>Register</title>
 </head>
 <body>
-    <h2>Login</h2>
+    <h2>Register</h2>
     <form method="post">
         {{ form.hidden_tag() }}
+        <p>{{ form.name.label }}: {{ form.name() }}</p>
         <p>{{ form.email.label }}: {{ form.email() }}</p>
         <p>{{ form.password.label }}: {{ form.password() }}</p>
         <p>{{ form.submit() }}</p>
     </form>
-    <p>Don't have an account? <a href="{{ url_for('register') }}">Register</a></p>
+    <p>Already have an account? <a href="{{ url_for('login') }}">Login</a></p>
 </body>
 </html>

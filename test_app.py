@@ -10,7 +10,7 @@ def client():
     app.config['MYSQL_HOST'] = 'localhost'
     app.config['MYSQL_USER'] = 'root'
     app.config['MYSQL_PASSWORD'] = '8966'  # Update with your MySQL password
-    app.config['MYSQL_DB'] = 'test_mydatabase'  # Use a test database
+    app.config['MYSQL_DB'] = 'mydatabase'  # Use a test database
     mysql.init_app(app)
 
     with app.test_client() as client:

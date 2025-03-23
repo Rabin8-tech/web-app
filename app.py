@@ -6,21 +6,6 @@ web forms, and Flask-MySQLdb for database interactions. The login page checks if
 If it is not, the user is informed to register first (with a registration link provided on the login page).
 After registration, the user can log in and access the dashboard.
 No additional email validation is performed beyond requiring a non-empty input.
-
-Dependencies:
-    - Flask
-    - Flask-WTF
-    - WTForms
-    - Flask-MySQLdb
-
-Configuration:
-    - The MySQL connection is configured using the app's configuration values.
-    - CSRF protection is disabled for demonstration purposes. It should be enabled in production.
-    
-Usage:
-    Run this script to start the Flask development server. Ensure that the MySQL database and table
-    (e.g., a `users` table with `id`, `email`, and `password` columns) exist, and update the configuration
-    values if necessary.
 """
 
 from flask import Flask, render_template, redirect, url_for, flash, session, request

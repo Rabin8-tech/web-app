@@ -14,8 +14,8 @@ jobs:
       mysql:
         image: mysql:8.0
         env:
-          MYSQL_ROOT_PASSWORD: '8966'  # Your actual root password
-          MYSQL_DATABASE: test_mydatabase
+          MYSQL_ROOT_PASSWORD: 'rabin8866'  # Your actual root password
+          MYSQL_DATABASE: mydatabase
         ports:
           - 3306:3306
         options: >-

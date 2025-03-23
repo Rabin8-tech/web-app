@@ -1,48 +1,89 @@
 import pytest
-from app import app, users_db
+from flask import session
+from app import app, mysql
+
 
 @pytest.fixture
 def client():
-    """Provide a test client for the Flask app."""
+    """Fixture to create a test client."""
+    app.config['TESTING'] = True
+    app.config['MYSQL_HOST'] = 'localhost'
+    app.config['MYSQL_USER'] = 'root'
+    app.config['MYSQL_PASSWORD'] = '8966'  # Update with your MySQL password
+    app.config['MYSQL_DB'] = 'test_mydatabase'  # Use a test database
+    mysql.init_app(app)
+
     with app.test_client() as client:
+        with app.app_context():
+            # Set up the test database, creating a 'users' table
+            cursor = mysql.connection.cursor()
+            cursor.execute("CREATE TABLE IF NOT EXISTS users (id INT AUTO_INCREMENT PRIMARY KEY, email VARCHAR(255), password VARCHAR(255))")
+            mysql.connection.commit()
         yield client
 
-def test_home_page(client):
-    """Test that the home page (/) renders the login page."""
-    response = client.get('/')
-    assert response.status_code == 200
-    # Check that the login form is rendered (by looking for "Login")
-    assert b"Login" in response.data
+        with app.app_context():
+            # Clean up after the test
+            cursor.execute("DROP TABLE IF EXISTS users")
+            mysql.connection.commit()
 
-def test_login_get(client):
-    """Test that a GET request to /login renders the login form with Email and Password fields."""
-    response = client.get('/login')
-    assert response.status_code == 200
-    assert b"Email" in response.data
-    assert b"Password" in response.data
 
-def test_login_post_redirect(client):
-    """Test that a valid login POST request logs in the user and redirects to /dashboard."""
-    # Create a test user in the in-memory users_db
-    test_email = "test@example.com"
-    test_password = "testpass"
-    users_db[test_email] = {"name": "Test User", "password": test_password}
-    
-    response = client.post(
-        '/login',
-        data={'email': test_email, 'password': test_password},
-        follow_redirects=True
-    )
-    assert response.status_code == 200
-    # The dashboard page should be rendered; check for dashboard content
-    assert b"Dashboard" in response.data or b"Welcome" in response.data
-    # Check that the user's name or email appears on the dashboard
-    assert b"Test User" in response.data or b"test@example.com" in response.data
+def test_register(client):
+    """Test user registration."""
+    response = client.post('/register', data={'email': 'test@example.com', 'password': 'password'}, follow_redirects=True)
+    assert b'Registration successful' in response.data
 
-def test_dashboard_without_login(client):
-    """Test that accessing /dashboard without being logged in redirects to the login page."""
+    # Ensure the user is in the database
+    cursor = mysql.connection.cursor()
+    cursor.execute("SELECT * FROM users WHERE email = %s", ('test@example.com',))
+    user = cursor.fetchone()
+    assert user is not None
+
+
+def test_register_existing_user(client):
+    """Test registering an already registered user."""
+    client.post('/register', data={'email': 'test@example.com', 'password': 'password'}, follow_redirects=True)
+    response = client.post('/register', data={'email': 'test@example.com', 'password': 'newpassword'}, follow_redirects=True)
+    assert b'Email already registered' in response.data
+
+
+def test_login(client):
+    """Test user login with correct credentials."""
+    # Register the user first
+    client.post('/register', data={'email': 'test@example.com', 'password': 'password'}, follow_redirects=True)
+
+    # Login with correct credentials
+    response = client.post('/login', data={'email': 'test@example.com', 'password': 'password'}, follow_redirects=True)
+    assert b'Login successful' in response.data
+
+
+def test_login_unregistered_user(client):
+    """Test login for unregistered users."""
+    response = client.post('/login', data={'email': 'unregistered@example.com', 'password': 'password'}, follow_redirects=True)
+    assert b'User not registered' in response.data
+
+
+def test_login_incorrect_password(client):
+    """Test login with an incorrect password."""
+    # Register the user first
+    client.post('/register', data={'email': 'test@example.com', 'password': 'password'}, follow_redirects=True)
+
+    # Attempt login with incorrect password
+    response = client.post('/login', data={'email': 'test@example.com', 'password': 'wrongpassword'}, follow_redirects=True)
+    assert b'Incorrect password' in response.data
+
+
+def test_dashboard_access(client):
+    """Test accessing the dashboard."""
+    # Register and login the user first
+    client.post('/register', data={'email': 'test@example.com', 'password': 'password'}, follow_redirects=True)
+    client.post('/login', data={'email': 'test@example.com', 'password': 'password'}, follow_redirects=True)
+
+    # Access the dashboard
     response = client.get('/dashboard', follow_redirects=True)
-    assert response.status_code == 200
-    # Since no user is logged in, the login page should be rendered.
-    assert b"Login" in response.data
-    # (Flash messages may not be rendered in the template, so we do not assert for them.)
+    assert b'Dashboard' in response.data
+
+
+def test_dashboard_access_without_login(client):
+    """Test accessing the dashboard without logging in."""
+    response = client.get('/dashboard', follow_redirects=True)
+    assert b'Please log in first' in response.data

@@ -41,7 +41,7 @@ jobs:
 
     - name: Create Test Database
       run: |
-        mysql -u root -p rabin8866 -e "CREATE DATABASE IF NOT EXISTS test_mydatabase;"
+        mysql -u root -p 'rabin8866' -e "CREATE DATABASE IF NOT EXISTS test_mydatabase;"
 
     - name: Run tests
       env:

@@ -1,10 +1,6 @@
-name: CI Pipeline
+name: Run Tests
 
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+on: [push, pull_request]
 
 jobs:
   test:
@@ -14,35 +10,33 @@ jobs:
       mysql:
         image: mysql:8.0
         env:
-          MYSQL_ROOT_PASSWORD: 'rabin8866'  # Your actual root password
-          MYSQL_DATABASE: mydatabase
+          MYSQL_ROOT_PASSWORD: "rabin8866"
+          MYSQL_DATABASE: "test_mydatabase"
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping -p8966"
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -p'rabin8866'"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=3
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.12'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-    - name: Run tests
-      env:
-        MYSQL_HOST: 127.0.0.1
-        MYSQL_USER: root
-        MYSQL_PASSWORD: 'rabin8866'  # Match your local password
-        MYSQL_DB: test_mydatabase
-      run: |
-        pytest -v --disable-warnings test_app.py
+      - name: Wait for MySQL to be ready
+        run: |
+          sleep 20  # Adjust if necessary
+
+      - name: Run tests
+        run: pytest test_app.py

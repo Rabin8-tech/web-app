@@ -7,7 +7,7 @@ If it is not, the user is informed to register first (with a registration link p
 After registration, the user can log in and access the dashboard.
 No additional email validation is performed beyond requiring a non-empty input.
 """
-
+import os
 from flask import Flask, render_template, redirect, url_for, flash, session, request
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField
@@ -17,10 +17,12 @@ from flask_mysqldb import MySQL
 app = Flask(__name__)
 
 # MySQL Configuration
-app.config['MYSQL_HOST'] = 'localhost'
-app.config['MYSQL_USER'] = 'root'
-app.config['MYSQL_PASSWORD'] = 'rabin8866'  # Make sure this is your correct password
-app.config['MYSQL_DB'] = 'mydatabase'
+app.config['MYSQL_HOST'] = os.environ.get('MYSQL_HOST', '127.0.0.1')
+app.config['MYSQL_PORT'] = int(os.environ.get('MYSQL_PORT', 3306))
+app.config['MYSQL_USER'] = os.environ.get('MYSQL_USER', 'root')
+app.config['MYSQL_PASSWORD'] = os.environ.get('MYSQL_PASSWORD', 'your_default_password')
+app.config['MYSQL_DB'] = os.environ.get('MYSQL_DB', 'your_default_database')
+app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
 app.secret_key = '8966rabin'
 mysql = MySQL(app)
 

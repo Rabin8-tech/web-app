@@ -1,42 +1,52 @@
-name: Run Tests
+name: Flask Application CI/CD
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   test:
     runs-on: ubuntu-latest
-
     services:
       mysql:
         image: mysql:8.0
         env:
-          MYSQL_ROOT_PASSWORD: "rabin8866"
-          MYSQL_DATABASE: "test_mydatabase"
+          MYSQL_ROOT_PASSWORD: rabin8866
+          MYSQL_DATABASE: test_mydatabase
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -p'rabin8866'"
+          --health-cmd="mysqladmin ping -h localhost"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=3
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Check out code
+      uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.12"
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: 3.9
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flask flask-mysqldb pytest
 
-      - name: Wait for MySQL to be ready
-        run: |
-          sleep 20  # Adjust if necessary
+    - name: Create Test Database
+      run: |
+        mysql -u root -p rabin8866 -e "CREATE DATABASE IF NOT EXISTS test_mydatabase;"
 
-      - name: Run tests
-        run: pytest test_app.py
+    - name: Run tests
+      env:
+        MYSQL_HOST: localhost
+        MYSQL_USER: root
+        MYSQL_PASSWORD: rabin8866
+        MYSQL_DB: test_mydatabase
+      run: pytest

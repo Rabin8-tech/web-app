@@ -38,6 +38,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install flask flask-mysqldb pytest
+        pip install flask-wtf
 
     - name: Create Test Database
       run: |

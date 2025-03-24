@@ -1,3 +1,12 @@
+import os
+os.environ['MYSQL_HOST'] = '127.0.0.1'
+os.environ['MYSQL_USER'] = 'root'
+os.environ['MYSQL_PASSWORD'] = 'rabin8866'
+os.environ['MYSQL_DB'] = 'test_mydatabase'
+os.environ['MYSQL_PORT'] = '3306'
+
+from app import app, mysql  # Import after setting env variables
+
 import pytest
 from flask import session
 from app import app, mysql  # Adjust the import if your Flask module is named differently

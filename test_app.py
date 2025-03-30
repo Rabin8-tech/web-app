@@ -9,7 +9,8 @@ from app import app, mysql  # Import after setting env variables
 
 import pytest
 from flask import session
-from app import app, mysql  # Adjust the import if your Flask module is named differently
+from app import app, mysql
+import requests  # Needed for monkeypatching
 
 @pytest.fixture
 def client():
@@ -165,3 +166,52 @@ def test_dashboard_access(client):
     response = client.get("/dashboard", follow_redirects=True)
     # Verify that the login page (or its form) is rendered.
     assert b"<form" in response.data and b"Email" in response.data
+
+def test_dashboard_openverse_search(client, monkeypatch):
+    """
+    Test the dashboard search functionality for Openverse integration:
+      - After logging in, submit a search query.
+      - Monkeypatch requests.get to return dummy responses for both images and audio.
+      - Verify that the dummy search results are rendered on the dashboard.
+    """
+    # Create dummy responses for images and audio.
+    class DummyResponse:
+        def __init__(self, results, status_code=200):
+            self._results = results
+            self.status_code = status_code
+
+        def json(self):
+            return {"results": self._results}
+
+    def dummy_get(url, headers):
+        if "/images/" in url:
+            return DummyResponse(results=[{"title": "dummy image"}])
+        elif "/audio/" in url:
+            return DummyResponse(results=[{"title": "dummy audio"}])
+        return DummyResponse(results=[], status_code=404)
+
+    # Monkeypatch the requests.get method used in the dashboard view.
+    monkeypatch.setattr("requests.get", dummy_get)
+
+    # Register and log in the test user.
+    client.post(
+        "/register",
+        data=dict(email="openverse@test.com", password="password123"),
+        follow_redirects=True
+    )
+    client.post(
+        "/login",
+        data=dict(email="openverse@test.com", password="password123"),
+        follow_redirects=True
+    )
+
+    # Post a search query to the dashboard.
+    response = client.post(
+        "/dashboard",
+        data=dict(query="nature"),
+        follow_redirects=True
+    )
+
+    # Check if the dummy image and audio results are present in the response.
+    assert b"dummy image" in response.data
+    assert b"dummy audio" in response.data

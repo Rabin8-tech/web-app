@@ -1,14 +1,9 @@
 """
-A Flask web application that provides user registration, login, and a dashboard.
-
-This module demonstrates a simple web application using Flask, Flask-WTF, and WTForms for handling
-web forms, and Flask-MySQLdb for database interactions. The login page checks if a user's email is registered.
-If it is not, the user is informed to register first (with a registration link provided on the login page).
-After registration, the user can log in and access the dashboard.
-No additional email validation is performed beyond requiring a non-empty input.
+A Flask web application with user registration, login, and a dashboard integrated with Openverse API for searching images and audio.
 """
 import os
-from flask import Flask, render_template, redirect, url_for, flash, session, request
+import requests
+from flask import Flask, render_template, redirect, url_for, flash, session
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField
 from wtforms.validators import DataRequired
@@ -20,12 +15,16 @@ app = Flask(__name__)
 app.config['MYSQL_HOST'] = os.environ.get('MYSQL_HOST', '127.0.0.1')
 app.config['MYSQL_PORT'] = int(os.environ.get('MYSQL_PORT', 3306))
 app.config['MYSQL_USER'] = os.environ.get('MYSQL_USER', 'root')
-app.config['MYSQL_PASSWORD'] = os.environ.get('MYSQL_PASSWORD', 'your_default_password')
-app.config['MYSQL_DB'] = os.environ.get('MYSQL_DB', 'your_default_database')
+app.config['MYSQL_PASSWORD'] = os.environ.get('MYSQL_PASSWORD', 'rabin8866')
+app.config['MYSQL_DB'] = os.environ.get('MYSQL_DB', 'mydatabase')
 app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
 app.secret_key = '8966rabin'
-mysql = MySQL(app)
 
+# Openverse API Configuration
+app.config['OPENVERSE_BASE_URL'] = 'https://api.openverse.engineering/v1'
+app.config['OPENVERSE_API_KEY'] = os.environ.get('OPENVERSE_API_KEY', '')  # Set your API key here
+
+mysql = MySQL(app)
 app.config['WTF_CSRF_ENABLED'] = False  # For demonstration purposes only
 
 class RegistrationForm(FlaskForm):
@@ -40,20 +39,18 @@ class LoginForm(FlaskForm):
     password = PasswordField("Password", validators=[DataRequired()])
     submit = SubmitField("Login")
 
+class SearchForm(FlaskForm):
+    """Form for searching Openverse content."""
+    query = StringField("Search", validators=[DataRequired()])
+    submit = SubmitField("Search")
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    """
-    Register a new user by inserting their email and password into the database.
-    
-    If the provided email is already registered, the user is informed via a flash message.
-    On successful registration, the user is redirected to the login page.
-    """
     form = RegistrationForm()
     if form.validate_on_submit():
         email = form.email.data
         password = form.password.data
         cursor = mysql.connection.cursor()
-        # Check if the email already exists
         cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
         if cursor.fetchone():
             flash("Email already registered", "warning")
@@ -66,57 +63,65 @@ def register():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """
-    Handle user login by checking credentials against the database.
-    
-    When a user submits the login form:
-        - The application checks whether the email exists in the database.
-        - If the email is not found, a flash message is displayed prompting the user to register,
-          and the login page is rendered again with a link to the registration page.
-        - If the email exists, the password is verified. On success, the user is logged in and redirected 
-          to the dashboard; otherwise, an error message is shown.
-    """
     form = LoginForm()
     if form.validate_on_submit():
         email = form.email.data
         password = form.password.data
         cursor = mysql.connection.cursor()
-        # Check if the user is registered
         cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
         user = cursor.fetchone()
         if not user:
             flash("User not registered, please register first.", "warning")
         else:
-            # Verify password for the existing user
             cursor.execute("SELECT * FROM users WHERE email = %s AND password = %s", (email, password))
             if cursor.fetchone():
-                session['user_id'] = email  # Store email in session
+                session['user_id'] = email
                 flash("Login successful", "success")
                 return redirect(url_for('dashboard'))
             else:
                 flash("Incorrect password", "danger")
     return render_template('login.html', form=form)
 
-@app.route('/dashboard')
+@app.route('/dashboard', methods=['GET', 'POST'])
 def dashboard():
-    """
-    Display the dashboard for a logged-in user.
+    if 'user_id' not in session:
+        flash("Please log in first.", "warning")
+        return redirect(url_for('login'))
     
-    If the user is not logged in (i.e., no email stored in the session), the user is redirected 
-    to the login page with a message prompting them to log in.
-    """
-    if 'user_id' in session:
-        return render_template('dashboard.html', user=session['user_id'])
-    flash("Please log in first.", "warning")
-    return redirect(url_for('login'))
+    form = SearchForm()
+    images = []
+    audio = []
+    
+    if form.validate_on_submit():
+        query = form.query.data
+        headers = {'Authorization': f'Bearer {app.config["OPENVERSE_API_KEY"]}'}
+        
+        # Fetch images from Openverse
+        image_url = f"{app.config['OPENVERSE_BASE_URL']}/images/?q={query}"
+        try:
+            response = requests.get(image_url, headers=headers)
+            if response.status_code == 200:
+                images = response.json().get('results', [])
+            else:
+                flash("Error fetching images", "danger")
+        except requests.exceptions.RequestException as e:
+            flash(f"Error connecting to Openverse: {str(e)}", "danger")
+        
+        # Fetch audio from Openverse
+        audio_url = f"{app.config['OPENVERSE_BASE_URL']}/audio/?q={query}"
+        try:
+            response = requests.get(audio_url, headers=headers)
+            if response.status_code == 200:
+                audio = response.json().get('results', [])
+            else:
+                flash("Error fetching audio", "danger")
+        except requests.exceptions.RequestException as e:
+            flash(f"Error connecting to Openverse: {str(e)}", "danger")
+    
+    return render_template('dashboard.html', user=session['user_id'], form=form, images=images, audio=audio)
 
 @app.route('/')
 def index():
-    """
-    Redirect the root URL to the login page.
-    
-    This ensures that the login page is the first page the user sees.
-    """
     return redirect(url_for('login'))
 
 if __name__ == '__main__':

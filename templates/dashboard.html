@@ -1,12 +1,47 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
     <title>Dashboard</title>
 </head>
 <body>
-    <h2>Welcome, {{ user }}!</h2>
-    <p>This is your dashboard.</p>
-    <p><a href="{{ url_for('login') }}">Logout</a></p>
+    <h1>Welcome, {{ user }}!</h1>
+    <a href="{{ url_for('login') }}">Logout</a>
+    
+    <form method="POST">
+        {{ form.hidden_tag() }}
+        {{ form.query.label }} {{ form.query(size=20) }}
+        {{ form.submit() }}
+    </form>
+
+    <h2>Images</h2>
+    {% if images %}
+        <div style="display: flex; flex-wrap: wrap;">
+        {% for image in images %}
+            <div style="margin: 10px;">
+                <img src="{{ image.thumbnail }}" alt="{{ image.title }}" style="max-width: 200px;">
+                <p>{{ image.title }} by {{ image.creator }}</p>
+            </div>
+        {% endfor %}
+        </div>
+    {% else %}
+        <p>No images found.</p>
+    {% endif %}
+
+    <h2>Audio</h2>
+    {% if audio %}
+        <div>
+        {% for track in audio %}
+            <div style="margin: 10px;">
+                <audio controls>
+                    <source src="{{ track.url }}" type="audio/mpeg">
+                    Your browser does not support the audio element.
+                </audio>
+                <p>{{ track.title }} by {{ track.creator }}</p>
+            </div>
+        {% endfor %}
+        </div>
+    {% else %}
+        <p>No audio found.</p>
+    {% endif %}
 </body>
 </html>

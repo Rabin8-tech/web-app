@@ -1,7 +1,7 @@
 """
-A Flask web application with user registration, login, and a dashboard integrated with Openverse API for searching images and audio.
-Passwords are now securely hashed using bcrypt, and plaintext passwords (if any) are migrated on login.
-SQL injection prevention is achieved by using parameterized queries.
+A Flask web application with user registration, login, and a dashboard integrated with the Openverse API for searching images and audio.
+Passwords are securely hashed using Flask-Bcrypt.
+SQL injection prevention is achieved using parameterized queries with flask_mysqldb.
 """
 import os
 import re
@@ -26,7 +26,7 @@ app.secret_key = '8966rabin'
 
 # Openverse API Configuration
 app.config['OPENVERSE_BASE_URL'] = 'https://api.openverse.engineering/v1'
-app.config['OPENVERSE_API_KEY'] = os.environ.get('OPENVERSE_API_KEY', '')  # Set your API key here
+app.config['OPENVERSE_API_KEY'] = os.environ.get('OPENVERSE_API_KEY', '')  # Set your API key if needed
 
 mysql = MySQL(app)
 bcrypt = Bcrypt(app)
@@ -78,16 +78,14 @@ def login():
         password = form.password.data
 
         cursor = mysql.connection.cursor()
-        # Fetch user by email only, then verify password
         cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
         user = cursor.fetchone()
         if not user:
             flash("User not registered, please register first.", "warning")
         else:
             stored_pw = user['password']
-            # Check if password is hashed (bcrypt hashes usually start with $2b$ or $2a$)
+            # Migrate plaintext password to bcrypt hash if needed.
             if not re.match(r"^\$2[abxy]\$", stored_pw):
-                # Plaintext password detected; if it matches, migrate to hashed password
                 if stored_pw == password:
                     new_hashed = bcrypt.generate_password_hash(password).decode('utf-8')
                     cursor.execute("UPDATE users SET password = %s WHERE email = %s", (new_hashed, email))
@@ -96,7 +94,6 @@ def login():
                 else:
                     flash("Incorrect password", "danger")
                     return render_template('login.html', form=form)
-            # Check password with bcrypt
             if bcrypt.check_password_hash(stored_pw, password):
                 session['user_id'] = email  # using email as session identifier
                 flash("Login successful", "success")
@@ -117,7 +114,7 @@ def dashboard():
     
     if form.validate_on_submit():
         query = form.query.data
-        headers = {'Authorization': f'Bearer {app.config["OPENVERSE_API_KEY"]}'}
+        headers = {'Authorization': f'Bearer {app.config["OPENVERSE_API_KEY"]}'} if app.config['OPENVERSE_API_KEY'] else {}
         
         # Fetch images from Openverse
         image_url = f"{app.config['OPENVERSE_BASE_URL']}/images/?q={query}"
@@ -142,6 +139,8 @@ def dashboard():
             flash(f"Error connecting to Openverse: {str(e)}", "danger")
     
     return render_template('dashboard.html', user=session['user_id'], form=form, images=images, audio=audio)
+
+# [Remaining app code remains identical...]
 
 @app.route('/')
 def index():

@@ -1,13 +1,17 @@
 """
 A Flask web application with user registration, login, and a dashboard integrated with Openverse API for searching images and audio.
+Passwords are now securely hashed using bcrypt, and plaintext passwords (if any) are migrated on login.
+SQL injection prevention is achieved by using parameterized queries.
 """
 import os
+import re
 import requests
 from flask import Flask, render_template, redirect, url_for, flash, session
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField
 from wtforms.validators import DataRequired
 from flask_mysqldb import MySQL
+from flask_bcrypt import Bcrypt
 
 app = Flask(__name__)
 
@@ -25,6 +29,7 @@ app.config['OPENVERSE_BASE_URL'] = 'https://api.openverse.engineering/v1'
 app.config['OPENVERSE_API_KEY'] = os.environ.get('OPENVERSE_API_KEY', '')  # Set your API key here
 
 mysql = MySQL(app)
+bcrypt = Bcrypt(app)
 app.config['WTF_CSRF_ENABLED'] = False  # For demonstration purposes only
 
 class RegistrationForm(FlaskForm):
@@ -48,14 +53,18 @@ class SearchForm(FlaskForm):
 def register():
     form = RegistrationForm()
     if form.validate_on_submit():
-        email = form.email.data
+        email = form.email.data.lower().strip()
         password = form.password.data
+
         cursor = mysql.connection.cursor()
+        # Check if user exists
         cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
         if cursor.fetchone():
             flash("Email already registered", "warning")
         else:
-            cursor.execute("INSERT INTO users (email, password) VALUES (%s, %s)", (email, password))
+            # Hash the password before storing it
+            hashed_pw = bcrypt.generate_password_hash(password).decode('utf-8')
+            cursor.execute("INSERT INTO users (email, password) VALUES (%s, %s)", (email, hashed_pw))
             mysql.connection.commit()
             flash("Registration successful. Please log in.", "success")
             return redirect(url_for('login'))
@@ -65,17 +74,31 @@ def register():
 def login():
     form = LoginForm()
     if form.validate_on_submit():
-        email = form.email.data
+        email = form.email.data.lower().strip()
         password = form.password.data
+
         cursor = mysql.connection.cursor()
+        # Fetch user by email only, then verify password
         cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
         user = cursor.fetchone()
         if not user:
             flash("User not registered, please register first.", "warning")
         else:
-            cursor.execute("SELECT * FROM users WHERE email = %s AND password = %s", (email, password))
-            if cursor.fetchone():
-                session['user_id'] = email
+            stored_pw = user['password']
+            # Check if password is hashed (bcrypt hashes usually start with $2b$ or $2a$)
+            if not re.match(r"^\$2[abxy]\$", stored_pw):
+                # Plaintext password detected; if it matches, migrate to hashed password
+                if stored_pw == password:
+                    new_hashed = bcrypt.generate_password_hash(password).decode('utf-8')
+                    cursor.execute("UPDATE users SET password = %s WHERE email = %s", (new_hashed, email))
+                    mysql.connection.commit()
+                    stored_pw = new_hashed
+                else:
+                    flash("Incorrect password", "danger")
+                    return render_template('login.html', form=form)
+            # Check password with bcrypt
+            if bcrypt.check_password_hash(stored_pw, password):
+                session['user_id'] = email  # using email as session identifier
                 flash("Login successful", "success")
                 return redirect(url_for('dashboard'))
             else:

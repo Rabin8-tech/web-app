@@ -9,7 +9,7 @@ import requests
 from flask import Flask, render_template, redirect, url_for, flash, session
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField
-from wtforms.validators import DataRequired
+from wtforms.validators import DataRequired, Email,EqualTo,Length,Regexp
 from flask_mysqldb import MySQL
 from flask_bcrypt import Bcrypt
 
@@ -33,11 +33,21 @@ bcrypt = Bcrypt(app)
 app.config['WTF_CSRF_ENABLED'] = False  # For demonstration purposes only
 
 class RegistrationForm(FlaskForm):
-    """Form for user registration."""
-    email = StringField("Email", validators=[DataRequired()])
-    password = PasswordField("Password", validators=[DataRequired()])
-    submit = SubmitField("Register")
-
+    """Form for user registration with enhanced fields."""
+    first_name = StringField('First Name', validators=[DataRequired()])
+    last_name = StringField('Last Name', validators=[DataRequired()])
+    email = StringField('Email', validators=[DataRequired(), Email()])
+    password = PasswordField('Password', validators=[
+        DataRequired(),
+        Length(min=8, message="Password must be at least 8 characters long."),
+        Regexp(r'^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$', message="Password must contain at least one letter, one number, and one special character."),
+    ])
+    confirm_password = PasswordField('Confirm Password', validators=[
+        DataRequired(),
+        EqualTo('password', message="Passwords must match.")
+    ])
+    submit = SubmitField('Register')
+    
 class LoginForm(FlaskForm):
     """Form for user login."""
     email = StringField("Email", validators=[DataRequired()])
@@ -53,6 +63,8 @@ class SearchForm(FlaskForm):
 def register():
     form = RegistrationForm()
     if form.validate_on_submit():
+        first_name = form.first_name.data.strip()
+        last_name = form.last_name.data.strip()
         email = form.email.data.lower().strip()
         password = form.password.data
 
@@ -64,7 +76,10 @@ def register():
         else:
             # Hash the password before storing it
             hashed_pw = bcrypt.generate_password_hash(password).decode('utf-8')
-            cursor.execute("INSERT INTO users (email, password) VALUES (%s, %s)", (email, hashed_pw))
+            cursor.execute("""
+                INSERT INTO users (first_name, last_name, email, password)
+                VALUES (%s, %s, %s, %s)
+            """, (first_name, last_name, email, hashed_pw))
             mysql.connection.commit()
             flash("Registration successful. Please log in.", "success")
             return redirect(url_for('login'))
@@ -107,7 +122,16 @@ def dashboard():
     if 'user_id' not in session:
         flash("Please log in first.", "warning")
         return redirect(url_for('login'))
+    email = session['user_id']
+    cursor = mysql.connection.cursor()
+    cursor.execute("SELECT first_name FROM users WHERE email = %s", (email,))
+    user = cursor.fetchone()
     
+    if not user:
+        flash("User not found.", "danger")
+        return redirect(url_for('login'))
+    
+    first_name = user['first_name']
     form = SearchForm()
     images = []
     audio = []
@@ -138,7 +162,7 @@ def dashboard():
         except requests.exceptions.RequestException as e:
             flash(f"Error connecting to Openverse: {str(e)}", "danger")
     
-    return render_template('dashboard.html', user=session['user_id'], form=form, images=images, audio=audio)
+    return render_template('dashboard.html', user=session['user_id'], first_name=first_name,form=form, images=images, audio=audio)
 
 # [Remaining app code remains identical...]
 

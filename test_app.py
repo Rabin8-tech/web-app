@@ -9,8 +9,8 @@ from app import app, mysql  # Import after setting env variables
 
 import pytest
 from flask import session
-from app import app, mysql
 import requests  # Needed for monkeypatching
+import re
 
 @pytest.fixture
 def client():
@@ -53,8 +53,9 @@ def client():
 def test_register(client):
     """
     Test user registration:
-      - Check that a registration attempt yields a page with a form (e.g., the login page).
-      - Verify that trying to register a duplicate email results in re-rendering the registration (or error) page.
+      - Check that a registration attempt yields a page with a form.
+      - Verify duplicate registrations are handled.
+      - Verify that the password stored is hashed (and not plaintext).
     """
     # Submit the registration form.
     response = client.post(
@@ -62,9 +63,18 @@ def test_register(client):
         data=dict(email="test@example.com", password="password123"),
         follow_redirects=True
     )
-    # The registration view flashes a success message and redirects to the login page.
-    # Here, we verify that the login form is rendered by checking for a form element with "Email".
     assert b"<form" in response.data and b"Email" in response.data
+
+    # Verify the stored password is hashed
+    cursor = mysql.connection.cursor()
+    cursor.execute("SELECT password FROM users WHERE email = %s", ("test@example.com",))
+    result = cursor.fetchone()
+    # The password should not equal the plaintext and should match bcrypt's pattern.
+    assert result is not None
+    stored_password = result['password']
+    assert stored_password != "password123"
+    # Check for bcrypt hash format (commonly starts with "$2b$" or "$2a$")
+    assert re.match(r"^\$2[abxy]\$", stored_password)
 
     # Attempt duplicate registration.
     response = client.post(
@@ -75,14 +85,37 @@ def test_register(client):
     # Either a flash message "Email already registered" is rendered or the form is re-displayed.
     assert b"Email already registered" in response.data or b"<form" in response.data
 
+def test_sql_injection_prevention(client):
+    """
+    Test that SQL injection is prevented by:
+      - Attempting to register with a malicious email.
+      - Ensuring that the email is stored as-is and no extra records are created.
+    """
+    malicious_email = "malicious@example.com' OR '1'='1"
+    response = client.post(
+        "/register",
+        data=dict(email=malicious_email, password="password123"),
+        follow_redirects=True
+    )
+    # The registration should succeed, storing the email exactly as provided.
+    cursor = mysql.connection.cursor()
+    cursor.execute("SELECT COUNT(*) AS cnt FROM users;")
+    result = cursor.fetchone()
+    # There should be exactly one record created.
+    assert result['cnt'] == 1
+
+    cursor.execute("SELECT email FROM users;")
+    result = cursor.fetchone()
+    # The stored email should match exactly the malicious string (i.e. no SQL injection happened).
+    assert result['email'] == malicious_email.lower()
+
+
 def test_login(client):
     """
     Test login functionality:
       - Successful login sets the session and redirects appropriately.
       - Login with an unregistered email does not set the session.
       - Login with an incorrect password does not set the session.
-      
-    To ensure each login attempt starts with a clean slate, we explicitly clear the session in between.
     """
     # Register the test user.
     client.post(
@@ -97,13 +130,10 @@ def test_login(client):
         data=dict(email="test@example.com", password="password123"),
         follow_redirects=True
     )
-    # Confirm that the session contains the logged-in email.
     with client.session_transaction() as sess:
         assert sess.get("user_id") == "test@example.com"
-    # Optionally, check for dashboard output.
     assert b"test@example.com" in response.data
 
-    # Clear the session before next login attempt.
     with client.session_transaction() as sess:
         sess.clear()
 
@@ -114,12 +144,9 @@ def test_login(client):
         follow_redirects=True
     )
     with client.session_transaction() as sess:
-        # The session should not contain a user_id.
         assert sess.get("user_id") is None
-    # Verify that the login form is rendered.
     assert b"<form" in response.data and b"Email" in response.data
 
-    # Clear the session before next login attempt.
     with client.session_transaction() as sess:
         sess.clear()
 
@@ -130,9 +157,7 @@ def test_login(client):
         follow_redirects=True
     )
     with client.session_transaction() as sess:
-        # Ensure that no session is set when the password is incorrect.
         assert sess.get("user_id") is None
-    # Verify that the login view is re-rendered (e.g., it contains a form).
     assert b"<form" in response.data and b"Email" in response.data
 
 def test_dashboard_access(client):
@@ -141,7 +166,6 @@ def test_dashboard_access(client):
       - When logged in, the dashboard should display user-specific content.
       - When not logged in, accessing the dashboard should redirect to the login page.
     """
-    # Register and log in the test user.
     client.post(
         "/register",
         data=dict(email="test@example.com", password="password123"),
@@ -153,18 +177,13 @@ def test_dashboard_access(client):
         follow_redirects=True
     )
 
-    # Access dashboard as an authenticated user.
     response = client.get("/dashboard", follow_redirects=True)
-    # We assume the dashboard displays the logged-in email.
     assert b"test@example.com" in response.data
 
-    # Simulate logging out by clearing the session.
     with client.session_transaction() as sess:
         sess.clear()
 
-    # Attempt to access the dashboard while not logged in.
     response = client.get("/dashboard", follow_redirects=True)
-    # Verify that the login page (or its form) is rendered.
     assert b"<form" in response.data and b"Email" in response.data
 
 def test_dashboard_openverse_search(client, monkeypatch):
@@ -174,7 +193,6 @@ def test_dashboard_openverse_search(client, monkeypatch):
       - Monkeypatch requests.get to return dummy responses for both images and audio.
       - Verify that the dummy search results are rendered on the dashboard.
     """
-    # Create dummy responses for images and audio.
     class DummyResponse:
         def __init__(self, results, status_code=200):
             self._results = results
@@ -190,10 +208,8 @@ def test_dashboard_openverse_search(client, monkeypatch):
             return DummyResponse(results=[{"title": "dummy audio"}])
         return DummyResponse(results=[], status_code=404)
 
-    # Monkeypatch the requests.get method used in the dashboard view.
     monkeypatch.setattr("requests.get", dummy_get)
 
-    # Register and log in the test user.
     client.post(
         "/register",
         data=dict(email="openverse@test.com", password="password123"),
@@ -205,13 +221,11 @@ def test_dashboard_openverse_search(client, monkeypatch):
         follow_redirects=True
     )
 
-    # Post a search query to the dashboard.
     response = client.post(
         "/dashboard",
         data=dict(query="nature"),
         follow_redirects=True
     )
 
-    # Check if the dummy image and audio results are present in the response.
     assert b"dummy image" in response.data
     assert b"dummy audio" in response.data

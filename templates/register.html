@@ -108,9 +108,15 @@
                 <div id="passwordStrength" class="strength-indicator"></div>
               </div>
 
+              <!-- Confirm Password + toggle eye -->
               <div class="mb-3">
                 {{ form.confirm_password.label(class="form-label") }}
-                {{ form.confirm_password(class="form-control") }}
+                <div class="input-group">
+                  {{ form.confirm_password(class="form-control", id="confirm_password") }}
+                  <button class="btn btn-outline-secondary" type="button" id="toggleConfirmPassword">
+                    <i class="bi bi-eye-slash" id="toggleConfirmIcon"></i>
+                  </button>
+                </div>
                 {% for err in form.confirm_password.errors %}
                   <div class="text-danger">{{ err }}</div>
                 {% endfor %}
@@ -155,14 +161,25 @@
     })();
 
     // toggle show/hide password
-    const togglePassword = document.getElementById('togglePassword'),
-          password = document.getElementById('password'),
-          toggleIcon = document.getElementById('toggleIcon');
+    const togglePassword       = document.getElementById('togglePassword'),
+          password             = document.getElementById('password'),
+          toggleIcon           = document.getElementById('toggleIcon'),
+          toggleConfirmPassBtn = document.getElementById('toggleConfirmPassword'),
+          confirmPassword      = document.getElementById('confirm_password'),
+          toggleConfirmIcon    = document.getElementById('toggleConfirmIcon');
+
     togglePassword.addEventListener('click', () => {
       const type = password.getAttribute('type') === 'password' ? 'text' : 'password';
       password.setAttribute('type', type);
       toggleIcon.classList.toggle('bi-eye');
       toggleIcon.classList.toggle('bi-eye-slash');
+    });
+
+    toggleConfirmPassBtn.addEventListener('click', () => {
+      const type = confirmPassword.getAttribute('type') === 'password' ? 'text' : 'password';
+      confirmPassword.setAttribute('type', type);
+      toggleConfirmIcon.classList.toggle('bi-eye');
+      toggleConfirmIcon.classList.toggle('bi-eye-slash');
     });
   </script>
 </body>

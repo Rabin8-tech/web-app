@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pricing - RabinVerse</title>
+  <!-- Bootstrap CSS CDN -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Google Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500&display=swap" rel="stylesheet">
+  <style>
+    body, html {
+      height: 100%;
+      margin: 0;
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(to bottom right, #e1f5fe, #b3e5fc);
+    }
+    .pricing-container {
+      margin: 2rem auto;
+      max-width: 1000px;
+      padding: 2rem;
+      background: #ffffff;
+      border-radius: 10px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    }
+    .card {
+      border: none;
+      border-radius: 10px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    }
+    .card-header {
+      background-color: #03a9f4;
+      color: #fff;
+      font-size: 1.5rem;
+    }
+    .card-body {
+      background: #fff;
+    }
+    .navbar {
+      position: relative;
+      z-index: 1000;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-light bg-light">
+    <div class="container">
+      <a class="navbar-brand" href="{{ url_for('dashboard') }}">RabinVerse</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" 
+              aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}">Home</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('about') }}">About</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('features') }}">Features</a></li>
+          <li class="nav-item"><a class="nav-link active" href="{{ url_for('pricing') }}">Pricing</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('contact') }}">Contact</a></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+  
+  <!-- Pricing Content -->
+  <div class="pricing-container">
+    <h1 class="text-center mb-4">Pricing Plans</h1>
+    <div class="row">
+      <!-- Basic Plan -->
+      <div class="col-md-4 mb-3">
+        <div class="card">
+          <div class="card-header text-center">
+            Basic
+          </div>
+          <div class="card-body text-center">
+            <p>Access fundamental features at no cost.</p>
+            <p><strong>$0 / month</strong></p>
+            <a href="#" class="btn btn-outline-primary">Select Plan</a>
+          </div>
+        </div>
+      </div>
+      <!-- Gold Plan -->
+      <div class="col-md-4 mb-3">
+        <div class="card">
+          <div class="card-header text-center">
+            Gold
+          </div>
+          <div class="card-body text-center">
+            <p>Unlock premium features for enhanced performance.</p>
+            <p><strong>$9.99 / month</strong></p>
+            <a href="#" class="btn btn-outline-primary">Select Plan</a>
+          </div>
+        </div>
+      </div>
+      <!-- Platinum Plan -->
+      <div class="col-md-4 mb-3">
+        <div class="card">
+          <div class="card-header text-center">
+            Platinum
+          </div>
+          <div class="card-body text-center">
+            <p>Enjoy all features with priority support and updates.</p>
+            <p><strong>$19.99 / month</strong></p>
+            <a href="#" class="btn btn-outline-primary">Select Plan</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Bootstrap JS Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

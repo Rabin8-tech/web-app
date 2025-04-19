@@ -5,7 +5,6 @@ os.environ['MYSQL_PASSWORD'] = 'rabin8866'
 os.environ['MYSQL_DB'] = 'test_mydatabase'
 os.environ['MYSQL_PORT'] = '3306'
 
-
 import pytest
 import re
 import requests
@@ -16,8 +15,8 @@ from app import app, mysql  # Import your Flask app
 def client():
     """Configures a test client and prepares the database."""
     app.config['TESTING'] = True
-    app.config['WTF_CSRF_ENABLED'] = False  # Disable CSRF for testing
-    app.config['MYSQL_DB'] = 'test_mydatabase'  # Ensure test database exists
+    app.config['WTF_CSRF_ENABLED'] = False
+    app.config['MYSQL_DB'] = 'test_mydatabase'
 
     with app.app_context():
         mysql.connection.ping()
@@ -51,9 +50,9 @@ def test_register(client):
 
     assert b"Registration successful" in response.data
 
-    # Verify password is hashed
     cursor = mysql.connection.cursor()
-    cursor.execute("SELECT password FROM users WHERE email = %s", ("test@example.com",))
+    cursor.execute("SELECT password FROM users WHERE email = %s",
+                   ("test@example.com",))
     stored_password = cursor.fetchone()["password"]
     assert not stored_password == "Password123!"
     assert re.match(r"^\$2[abxy]\$", stored_password)
@@ -80,7 +79,7 @@ def test_login(client):
 def test_sql_injection_prevention(client):
     """Tests SQL injection prevention."""
     malicious_email = "malicious@example.com' --"
-    response = client.post("/register", data={
+    client.post("/register", data={
         "first_name": "Malicious",
         "last_name": "User",
         "email": malicious_email,
@@ -91,7 +90,6 @@ def test_sql_injection_prevention(client):
     cursor = mysql.connection.cursor()
     cursor.execute("SELECT email FROM users WHERE email = %s", (malicious_email,))
     result = cursor.fetchone()
-
     assert result is None, "SQL injection should have been prevented!"
 
 def test_dashboard_access(client):
@@ -118,19 +116,22 @@ def test_dashboard_openverse_search(client, monkeypatch):
         def __init__(self, results, status_code=200):
             self._results = results
             self.status_code = status_code
+            self.ok = (status_code == 200)   # <— add .ok here
 
         def json(self):
             return {"results": self._results}
 
-    def dummy_get(url, headers):
+    def dummy_get(url, headers=None):
         if "/images/" in url:
             return DummyResponse([{"title": "dummy image"}])
         elif "/audio/" in url:
             return DummyResponse([{"title": "dummy audio"}])
         return DummyResponse([], status_code=404)
 
-    monkeypatch.setattr("requests.get", dummy_get)
+    # Monkey‑patch requests.get so our view picks up DummyResponse.ok
+    monkeypatch.setattr(requests, "get", dummy_get)
 
+    # Register & login
     client.post("/register", data={
         "first_name": "Search",
         "last_name": "Tester",
@@ -138,12 +139,14 @@ def test_dashboard_openverse_search(client, monkeypatch):
         "password": "Password123!",
         "confirm_password": "Password123!"
     }, follow_redirects=True)
-
     client.post("/login", data={
         "email": "search@test.com",
         "password": "Password123!"
     }, follow_redirects=True)
 
+    # Perform the dashboard POST
     response = client.post("/dashboard", data={"query": "nature"}, follow_redirects=True)
+
+    # Assert our dummy titles show up
     assert b"dummy image" in response.data
     assert b"dummy audio" in response.data

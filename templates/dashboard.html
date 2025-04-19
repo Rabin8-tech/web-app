@@ -1,105 +1,175 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>RabinVerse-Dashboard</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RabinVerse – Dashboard</title>
+
+  <!-- Bootstrap CSS + Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet" />
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500&display=swap" rel="stylesheet" />
+  <style>
+    body, html {
+      height: 100%;
+      margin: 0;
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(to bottom right, #e1f5fe, #b3e5fc);
+    }
+    .sidebar {
+      background: #fff;
+      border-radius: 10px;
+      padding: 1rem;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+      height: 100%;
+    }
+    .flash-container {
+      position: fixed;
+      bottom: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1100;
+      max-width: 90%;
+    }
+  </style>
 </head>
 <body>
   <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+  <nav class="navbar navbar-expand-lg" style="background-color: #ADD8E6;">
     <div class="container">
-      <a class="navbar-brand" href="#">RabinVerse</a>
-      <div class="d-flex">
-        <a href="{{ url_for('login') }}" class="btn btn-outline-light">Logout</a>
+      <a class="navbar-brand" href="{{ url_for('dashboard') }}">RabinVerse</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavDashboard">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNavDashboard">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}">Home</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('features') }}">Features</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('pricing') }}">Pricing</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('about') }}">About</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('contact') }}">Contact</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('logout') }}">Logout</a></li>
+        </ul>
       </div>
     </div>
   </nav>
-  
-  <!-- Flash Messages -->
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      <div class="container mt-3">
-        {% for category, message in messages %}
-          <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-            {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-          </div>
+
+  <!-- Offcanvas for mobile Recent Searches -->
+  <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasSearches" aria-labelledby="offcanvasSearchesLabel">
+    <div class="offcanvas-header">
+      <h5 class="offcanvas-title" id="offcanvasSearchesLabel">Recent Searches</h5>
+      <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body">
+      <ul class="list-unstyled">
+        {% for s in recent_searches %}
+          <li><a href="{{ url_for('dashboard') }}?search_query={{ s }}">{{ s }}</a></li>
+        {% else %}
+          <li>No recent searches.</li>
         {% endfor %}
-      </div>
-    {% endif %}
-  {% endwith %}
-  
-  <!-- Main Container -->
-  <div class="container mt-5">
-    <h2>Welcome, {{ first_name }}!</h2>
-    <hr>
-    <h4>Search Openverse</h4>
-    <form method="post" class="row g-3">
-      {{ form.hidden_tag() }}
-      <div class="col-auto">
-        {{ form.query(class="form-control", placeholder=" Search for content ") }}
-      </div>
-      <div class="col-auto">
-        {{ form.submit(class="btn btn-primary") }}
-      </div>
-    </form>
-    <hr>
-    <!-- Images Section -->
-    {% if images %}
-      <h4>Images</h4>
-      <div class="row">
-        {% for image in images %}
-          <div class="col-md-3">
-            <div class="card mb-3">
-              <img src="{{ image.thumbnail }}" class="card-img-top" alt="{{ image.title }}">
-              <div class="card-body">
-                <h5 class="card-title">{{ image.title }}</h5>
-              </div>
-            </div>
-          </div>
-        {% endfor %}
-      </div>
-    {% endif %}
-    
-    <!-- Audio Section -->
-    {% if audio %}
-      <h4>Audio</h4>
-      <div class="row">
-        {% for track in audio %}
-          <div class="col-md-4">
-            <div class="card mb-3">
-              <div class="card-body">
-                <h5 class="card-title">{{ track.title }}</h5>
-                {% if track.url %}
-                  <audio controls style="width: 100%;">
-                    <source src="{{ track.url }}" type="audio/mpeg">
-                    Your browser does not support the audio element.
-                  </audio>
-                  <div class="mt-2">
-                    <small class="text-muted">License: {{ track.license }}</small>
-                  </div>
-                {% else %}
-                  <p class="text-danger">Audio URL not available</p>
-                {% endif %}
-              </div>
-            </div>
-          </div>
-        {% endfor %}
-      </div>
-    {% endif %}
+      </ul>
+      <a href="{{ url_for('clear_searches') }}" class="btn btn-sm btn-danger mt-2">Clear Searches</a>
+    </div>
   </div>
-  
-  <!-- Script to auto-hide success flash messages after 2 seconds -->
+
+  <div class="container-fluid dashboard-container">
+    <div class="row">
+
+      <!-- Static sidebar on md+ -->
+      <div class="col-12 col-md-3 mb-4 mb-md-0 d-none d-md-block">
+        <div class="sidebar">
+          <h5>
+            Recent Searches
+            <a class="text-danger ms-2" href="{{ url_for('clear_searches') }}">&times;</a>
+          </h5>
+          <ul class="list-unstyled">
+            {% for s in recent_searches %}
+              <li><a href="{{ url_for('dashboard') }}?search_query={{ s }}">{{ s }}</a></li>
+            {% else %}
+              <li>No recent searches.</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+
+      <!-- Main Content -->
+      <div class="col-12 col-md-9">
+
+        <!-- Mobile toggle placed directly below RabinVerse icon -->
+        <div class="d-flex justify-content-center py-2 d-md-none">
+          <button class="btn btn-outline-secondary" type="button"
+                  data-bs-toggle="offcanvas" data-bs-target="#offcanvasSearches">
+            <i class="bi bi-list"></i> Recent Searches
+          </button>
+        </div>
+
+        <h2>Welcome, {{ first_name }}!</h2>
+        <hr>
+
+        <!-- Search Form -->
+        <div class="search-form mb-3">
+          <form method="post">
+            {{ form.hidden_tag() }}
+            <div class="input-group">
+              {{ form.query(class="form-control", placeholder="Search for images and audio…") }}
+              <button class="btn btn-primary" type="submit">Search</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Results -->
+        {% if images or audio %}
+          <div class="search-results mb-3">
+            <h5>Search Results</h5>
+            {% if images %}
+              <h6>Images</h6>
+              <div class="row">
+                {% for img in images %}
+                  <div class="col-6 col-md-3 mb-3">
+                    <img src="{{ img.thumbnail }}" class="img-fluid rounded" alt="{{ img.title }}">
+                    <p>{{ img.title|truncate(20) }}</p>
+                    <a href="{{ img.thumbnail }}" download class="small">Download</a>
+                  </div>
+                {% endfor %}
+              </div>
+            {% endif %}
+            {% if audio %}
+              <h6>Audio</h6>
+              <div class="list-group">
+                {% for track in audio %}
+                  <div class="list-group-item">
+                    <strong>{{ track.title }}</strong>
+                    <audio controls class="w-100 mt-1">
+                      <source src="{{ track.url }}" type="audio/mpeg">
+                      Your browser does not support audio.
+                    </audio>
+                    <a href="{{ track.url }}" download class="small">Download</a>
+                  </div>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Flash Messages -->
+  <div class="flash-container">
+    {% for category, msg in get_flashed_messages(with_categories=true) %}
+      <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+        {{ msg }}
+      </div>
+    {% endfor %}
+  </div>
+
   <script>
-    setTimeout(function(){
-      var alerts = document.querySelectorAll('.alert-success');
-      alerts.forEach(function(alert) {
-        alert.style.display = 'none';
-      });
-    }, 2000);
+    // auto-hide flash
+    setTimeout(() => {
+      document.querySelectorAll('.flash-container .alert').forEach(a => a.remove());
+    }, 1000);
   </script>
-  
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

@@ -1,19 +1,17 @@
-"""
-A Flask web application with user registration, login, and a dashboard integrated with the Openverse API for searching images and audio.
-Passwords are securely hashed using Flask-Bcrypt.
-SQL injection prevention is achieved using parameterized queries with flask_mysqldb.
-"""
+# app.py
+
 import os
 import re
 import requests
-from flask import Flask, render_template, redirect, url_for, flash, session
+from flask import Flask, render_template, redirect, url_for, flash, session, request
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField
-from wtforms.validators import DataRequired, Email,EqualTo,Length,Regexp
+from wtforms.validators import DataRequired, Email, EqualTo, Length, Regexp
 from flask_mysqldb import MySQL
 from flask_bcrypt import Bcrypt
 
 app = Flask(__name__)
+app.secret_key = '8966rabin'
 
 # MySQL Configuration
 app.config['MYSQL_HOST'] = os.environ.get('MYSQL_HOST', '127.0.0.1')
@@ -22,153 +20,177 @@ app.config['MYSQL_USER'] = os.environ.get('MYSQL_USER', 'root')
 app.config['MYSQL_PASSWORD'] = os.environ.get('MYSQL_PASSWORD', 'rabin8866')
 app.config['MYSQL_DB'] = os.environ.get('MYSQL_DB', 'mydatabase')
 app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
-app.secret_key = '8966rabin'
 
-# Openverse API Configuration
+# Openverse API
 app.config['OPENVERSE_BASE_URL'] = 'https://api.openverse.engineering/v1'
-app.config['OPENVERSE_API_KEY'] = os.environ.get('OPENVERSE_API_KEY', '')  # Set your API key if needed
+app.config['OPENVERSE_API_KEY'] = os.environ.get('OPENVERSE_API_KEY', '')
 
 mysql = MySQL(app)
 bcrypt = Bcrypt(app)
-app.config['WTF_CSRF_ENABLED'] = False  # For demonstration purposes only
+app.config['WTF_CSRF_ENABLED'] = False
 
+# In‑memory store for recent searches
+recent_searches = []
+
+# Forms
 class RegistrationForm(FlaskForm):
-    """Form for user registration with enhanced fields."""
     first_name = StringField('First Name', validators=[DataRequired()])
-    last_name = StringField('Last Name', validators=[DataRequired()])
-    email = StringField('Email', validators=[DataRequired(), Email()])
-    password = PasswordField('Password', validators=[
+    last_name  = StringField('Last Name',  validators=[DataRequired()])
+    email      = StringField('Email',      validators=[DataRequired(), Email()])
+    password   = PasswordField('Password', validators=[
         DataRequired(),
-        Length(min=8, message="Password must be at least 8 characters long."),
-        Regexp(r'^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$', message="Password must contain at least one letter, one number, and one special character."),
+        Length(min=8),
+        Regexp(
+            r'^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*?&]).+$',
+            message="Password must contain a letter, number, and special character."
+        ),
     ])
     confirm_password = PasswordField('Confirm Password', validators=[
-        DataRequired(),
-        EqualTo('password', message="Passwords must match.")
+        DataRequired(), EqualTo('password')
     ])
     submit = SubmitField('Register')
-    
+
 class LoginForm(FlaskForm):
-    """Form for user login."""
-    email = StringField("Email", validators=[DataRequired()])
+    email    = StringField("Email",    validators=[DataRequired()])
     password = PasswordField("Password", validators=[DataRequired()])
-    submit = SubmitField("Login")
+    submit   = SubmitField("Login")
 
 class SearchForm(FlaskForm):
-    """Form for searching Openverse content."""
-    query = StringField("Search", validators=[DataRequired()])
+    query  = StringField("Search", validators=[DataRequired()])
     submit = SubmitField("Search")
 
-@app.route('/register', methods=['GET', 'POST'])
+# Routes
+@app.route('/')
+def index():
+    return redirect(url_for('login'))
+
+@app.route('/register', methods=['GET','POST'])
 def register():
     form = RegistrationForm()
     if form.validate_on_submit():
-        first_name = form.first_name.data.strip()
-        last_name = form.last_name.data.strip()
-        email = form.email.data.lower().strip()
-        password = form.password.data
-
         cursor = mysql.connection.cursor()
-        # Check if user exists
+        email = form.email.data.lower().strip()
         cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
         if cursor.fetchone():
             flash("Email already registered", "warning")
         else:
-            # Hash the password before storing it
-            hashed_pw = bcrypt.generate_password_hash(password).decode('utf-8')
-            cursor.execute("""
-                INSERT INTO users (first_name, last_name, email, password)
-                VALUES (%s, %s, %s, %s)
-            """, (first_name, last_name, email, hashed_pw))
+            hashed_pw = bcrypt.generate_password_hash(form.password.data).decode('utf-8')
+            cursor.execute(
+                "INSERT INTO users (first_name,last_name,email,password) VALUES (%s,%s,%s,%s)",
+                (form.first_name.data, form.last_name.data, email, hashed_pw)
+            )
             mysql.connection.commit()
             flash("Registration successful. Please log in.", "success")
             return redirect(url_for('login'))
     return render_template('register.html', form=form)
 
-@app.route('/login', methods=['GET', 'POST'])
+@app.route('/login', methods=['GET','POST'])
 def login():
     form = LoginForm()
     if form.validate_on_submit():
-        email = form.email.data.lower().strip()
-        password = form.password.data
-
         cursor = mysql.connection.cursor()
+        email = form.email.data.lower().strip()
         cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
         user = cursor.fetchone()
         if not user:
-            flash("User not registered, please register first.", "warning")
+            flash("User not registered", "warning")
         else:
             stored_pw = user['password']
-            # Migrate plaintext password to bcrypt hash if needed.
+            # Migrate plaintext to bcrypt if needed
             if not re.match(r"^\$2[abxy]\$", stored_pw):
-                if stored_pw == password:
-                    new_hashed = bcrypt.generate_password_hash(password).decode('utf-8')
-                    cursor.execute("UPDATE users SET password = %s WHERE email = %s", (new_hashed, email))
+                if stored_pw == form.password.data:
+                    new_hashed = bcrypt.generate_password_hash(stored_pw).decode('utf-8')
+                    cursor.execute("UPDATE users SET password=%s WHERE email=%s", (new_hashed, email))
                     mysql.connection.commit()
                     stored_pw = new_hashed
                 else:
                     flash("Incorrect password", "danger")
                     return render_template('login.html', form=form)
-            if bcrypt.check_password_hash(stored_pw, password):
-                session['user_id'] = email  # using email as session identifier
+            if bcrypt.check_password_hash(stored_pw, form.password.data):
+                session['user_id'] = email
                 flash("Login successful", "success")
                 return redirect(url_for('dashboard'))
             else:
                 flash("Incorrect password", "danger")
     return render_template('login.html', form=form)
 
-@app.route('/dashboard', methods=['GET', 'POST'])
+@app.route('/dashboard', methods=['GET','POST'])
 def dashboard():
     if 'user_id' not in session:
         flash("Please log in first.", "warning")
         return redirect(url_for('login'))
-    email = session['user_id']
+
+    # get first name
     cursor = mysql.connection.cursor()
-    cursor.execute("SELECT first_name FROM users WHERE email = %s", (email,))
+    cursor.execute("SELECT first_name FROM users WHERE email = %s", (session['user_id'],))
     user = cursor.fetchone()
-    
-    if not user:
-        flash("User not found.", "danger")
-        return redirect(url_for('login'))
-    
-    first_name = user['first_name']
+    first_name = user['first_name'] if user else 'User'
+
     form = SearchForm()
     images = []
-    audio = []
-    
+    audio  = []
+    query  = None
+
+    # click on a recent search
+    if request.method == 'GET' and request.args.get('search_query'):
+        query = request.args.get('search_query')
+
+    # new search via POST
     if form.validate_on_submit():
-        query = form.query.data
-        headers = {'Authorization': f'Bearer {app.config["OPENVERSE_API_KEY"]}'} if app.config['OPENVERSE_API_KEY'] else {}
-        
-        # Fetch images from Openverse
-        image_url = f"{app.config['OPENVERSE_BASE_URL']}/images/?q={query}"
-        try:
-            response = requests.get(image_url, headers=headers)
-            if response.status_code == 200:
-                images = response.json().get('results', [])
-            else:
-                flash("Error fetching images", "danger")
-        except requests.exceptions.RequestException as e:
-            flash(f"Error connecting to Openverse: {str(e)}", "danger")
-        
-        # Fetch audio from Openverse
-        audio_url = f"{app.config['OPENVERSE_BASE_URL']}/audio/?q={query}"
-        try:
-            response = requests.get(audio_url, headers=headers)
-            if response.status_code == 200:
-                audio = response.json().get('results', [])
-            else:
-                flash("Error fetching audio", "danger")
-        except requests.exceptions.RequestException as e:
-            flash(f"Error connecting to Openverse: {str(e)}", "danger")
-    
-    return render_template('dashboard.html', user=session['user_id'], first_name=first_name,form=form, images=images, audio=audio)
+        query = form.query.data.strip()
 
-# [Remaining app code remains identical...]
+    if query:
+        # maintain last 5 searches, de‑duped
+        if query not in recent_searches:
+            recent_searches.append(query)
+            if len(recent_searches) > 5:
+                recent_searches.pop(0)
 
-@app.route('/')
-def index():
+        headers = {}
+        if app.config['OPENVERSE_API_KEY']:
+            headers['Authorization'] = f"Bearer {app.config['OPENVERSE_API_KEY']}"
+
+        # fetch images
+        img_res = requests.get(f"{app.config['OPENVERSE_BASE_URL']}/images/?q={query}", headers=headers)
+        if img_res.ok:
+            images = img_res.json().get('results', [])
+
+        # fetch audio
+        aud_res = requests.get(f"{app.config['OPENVERSE_BASE_URL']}/audio/?q={query}", headers=headers)
+        if aud_res.ok:
+            audio = aud_res.json().get('results', [])
+
+    return render_template(
+        'dashboard.html',
+        first_name=first_name,
+        query=query,
+        images=images,
+        audio=audio,
+        recent_searches=recent_searches,
+        form=form
+    )
+
+@app.route('/clear_searches')
+def clear_searches():
+    recent_searches.clear()
+    flash("Recent searches cleared.", "info")
+    return redirect(url_for('dashboard'))
+
+@app.route('/logout')
+def logout():
+    session.pop('user_id', None)
+    flash("Logged out successfully", "info")
     return redirect(url_for('login'))
+
+# Static pages
+@app.route('/features')
+def features():  return render_template('features.html')
+@app.route('/pricing')
+def pricing():   return render_template('pricing.html')
+@app.route('/about')
+def about():     return render_template('about.html')
+@app.route('/contact')
+def contact():   return render_template('contact.html')
 
 if __name__ == '__main__':
     app.run(debug=True)

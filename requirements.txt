@@ -7,3 +7,4 @@ pytest==8.3.5
 Werkzeug==2.1.2  # This version is compatible with Flask 2.x
 Flask-Bcrypt==1.0.1
 email_validator==2.2.0
+gunicorn==23.0.0

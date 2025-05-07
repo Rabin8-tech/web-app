@@ -15,11 +15,10 @@ bcrypt = Bcrypt(app)
 app.config['WTF_CSRF_ENABLED'] = False
 
 # PostgreSQL Configuration (via environment or defaults)
-app.config['DB_HOST']     = os.environ.get('DB_HOST', 'localhost')
-app.config['DB_PORT']     = os.environ.get('DB_PORT', '5432')
-app.config['DB_NAME']     = os.environ.get('DB_NAME', 'mydatabase')
-app.config['DB_USER']     = os.environ.get('DB_USER', 'rabin')
-app.config['DB_PASSWORD'] = os.environ.get('DB_PASSWORD', 'resham8866')
+bcrypt = Bcrypt(app)
+
+# Hardcoded PostgreSQL URL
+db_url = 'postgresql://media_admin:0Eys5adGA9Tvyyc7zvfOa64ZW7Rl33ZC@dpg-d0dkj5euk2gs73d7kdag-a.oregon-postgres.render.com/open_media_db'
 
 # Openverse API
 app.config['OPENVERSE_BASE_URL'] = 'https://api.openverse.engineering/v1'
@@ -31,19 +30,11 @@ recent_searches = []
 # --- Database helper functions ---
 def get_db_connection():
     if 'db_conn' not in g:
-        g.db_conn = psycopg2.connect(
-            host     = app.config['DB_HOST'],
-            port     = app.config['DB_PORT'],
-            dbname   = app.config['DB_NAME'],
-            user     = app.config['DB_USER'],
-            password = app.config['DB_PASSWORD']
-        )
+        g.db_conn = psycopg2.connect(db_url)
     return g.db_conn
 
 def get_db_cursor():
-    conn = get_db_connection()
-    # RealDictCursor gives us dict-like rows, similar to your MySQL DictCursor
-    return conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    return get_db_connection().cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
 @app.teardown_appcontext
 def close_db_connection(exc):

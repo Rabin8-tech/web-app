@@ -1,38 +1,57 @@
-# app.py
-
 import os
 import re
 import requests
-from flask import Flask, render_template, redirect, url_for, flash, session, request
+from flask import Flask, render_template, redirect, url_for, flash, session, request, g
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField
 from wtforms.validators import DataRequired, Email, EqualTo, Length, Regexp
-from flask_mysqldb import MySQL
 from flask_bcrypt import Bcrypt
+import psycopg2
+import psycopg2.extras
 
 app = Flask(__name__)
 app.secret_key = '8966rabin'
-
-# MySQL Configuration
-app.config['MYSQL_HOST'] = os.environ.get('MYSQL_HOST', '127.0.0.1')
-app.config['MYSQL_PORT'] = int(os.environ.get('MYSQL_PORT', 3306))
-app.config['MYSQL_USER'] = os.environ.get('MYSQL_USER', 'root')
-app.config['MYSQL_PASSWORD'] = os.environ.get('MYSQL_PASSWORD', 'rabin8866')
-app.config['MYSQL_DB'] = os.environ.get('MYSQL_DB', 'mydatabase')
-app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
-
-# Openverse API
-app.config['OPENVERSE_BASE_URL'] = 'https://api.openverse.engineering/v1'
-app.config['OPENVERSE_API_KEY'] = os.environ.get('OPENVERSE_API_KEY', '')
-
-mysql = MySQL(app)
 bcrypt = Bcrypt(app)
 app.config['WTF_CSRF_ENABLED'] = False
 
-# In‑memory store for recent searches
+# PostgreSQL Configuration (via environment or defaults)
+app.config['DB_HOST']     = os.environ.get('DB_HOST', 'localhost')
+app.config['DB_PORT']     = os.environ.get('DB_PORT', '5432')
+app.config['DB_NAME']     = os.environ.get('DB_NAME', 'mydatabase')
+app.config['DB_USER']     = os.environ.get('DB_USER', 'rabin')
+app.config['DB_PASSWORD'] = os.environ.get('DB_PASSWORD', 'resham8866')
+
+# Openverse API
+app.config['OPENVERSE_BASE_URL'] = 'https://api.openverse.engineering/v1'
+app.config['OPENVERSE_API_KEY']  = os.environ.get('OPENVERSE_API_KEY', '')
+
+# In-memory store for recent searches
 recent_searches = []
 
-# Forms
+# --- Database helper functions ---
+def get_db_connection():
+    if 'db_conn' not in g:
+        g.db_conn = psycopg2.connect(
+            host     = app.config['DB_HOST'],
+            port     = app.config['DB_PORT'],
+            dbname   = app.config['DB_NAME'],
+            user     = app.config['DB_USER'],
+            password = app.config['DB_PASSWORD']
+        )
+    return g.db_conn
+
+def get_db_cursor():
+    conn = get_db_connection()
+    # RealDictCursor gives us dict-like rows, similar to your MySQL DictCursor
+    return conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+@app.teardown_appcontext
+def close_db_connection(exc):
+    db = g.pop('db_conn', None)
+    if db is not None:
+        db.close()
+
+# --- Forms ---
 class RegistrationForm(FlaskForm):
     first_name = StringField('First Name', validators=[DataRequired()])
     last_name  = StringField('Last Name',  validators=[DataRequired()])
@@ -45,9 +64,7 @@ class RegistrationForm(FlaskForm):
             message="Password must contain a letter, number, and special character."
         ),
     ])
-    confirm_password = PasswordField('Confirm Password', validators=[
-        DataRequired(), EqualTo('password')
-    ])
+    confirm_password = PasswordField('Confirm Password', validators=[DataRequired(), EqualTo('password')])
     submit = SubmitField('Register')
 
 class LoginForm(FlaskForm):
@@ -59,7 +76,7 @@ class SearchForm(FlaskForm):
     query  = StringField("Search", validators=[DataRequired()])
     submit = SubmitField("Search")
 
-# Routes
+# --- Routes ---
 @app.route('/')
 def index():
     return redirect(url_for('login'))
@@ -68,7 +85,7 @@ def index():
 def register():
     form = RegistrationForm()
     if form.validate_on_submit():
-        cursor = mysql.connection.cursor()
+        cursor = get_db_cursor()
         email = form.email.data.lower().strip()
         cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
         if cursor.fetchone():
@@ -76,10 +93,10 @@ def register():
         else:
             hashed_pw = bcrypt.generate_password_hash(form.password.data).decode('utf-8')
             cursor.execute(
-                "INSERT INTO users (first_name,last_name,email,password) VALUES (%s,%s,%s,%s)",
+                "INSERT INTO users (first_name, last_name, email, password) VALUES (%s, %s, %s, %s)",
                 (form.first_name.data, form.last_name.data, email, hashed_pw)
             )
-            mysql.connection.commit()
+            get_db_connection().commit()
             flash("Registration successful. Please log in.", "success")
             return redirect(url_for('login'))
     return render_template('register.html', form=form)
@@ -88,7 +105,7 @@ def register():
 def login():
     form = LoginForm()
     if form.validate_on_submit():
-        cursor = mysql.connection.cursor()
+        cursor = get_db_cursor()
         email = form.email.data.lower().strip()
         cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
         user = cursor.fetchone()
@@ -101,7 +118,7 @@ def login():
                 if stored_pw == form.password.data:
                     new_hashed = bcrypt.generate_password_hash(stored_pw).decode('utf-8')
                     cursor.execute("UPDATE users SET password=%s WHERE email=%s", (new_hashed, email))
-                    mysql.connection.commit()
+                    get_db_connection().commit()
                     stored_pw = new_hashed
                 else:
                     flash("Incorrect password", "danger")
@@ -120,8 +137,7 @@ def dashboard():
         flash("Please log in first.", "warning")
         return redirect(url_for('login'))
 
-    # get first name
-    cursor = mysql.connection.cursor()
+    cursor = get_db_cursor()
     cursor.execute("SELECT first_name FROM users WHERE email = %s", (session['user_id'],))
     user = cursor.fetchone()
     first_name = user['first_name'] if user else 'User'
@@ -131,16 +147,12 @@ def dashboard():
     audio  = []
     query  = None
 
-    # click on a recent search
     if request.method == 'GET' and request.args.get('search_query'):
         query = request.args.get('search_query')
-
-    # new search via POST
     if form.validate_on_submit():
         query = form.query.data.strip()
 
     if query:
-        # maintain last 5 searches, de‑duped
         if query not in recent_searches:
             recent_searches.append(query)
             if len(recent_searches) > 5:
@@ -150,12 +162,10 @@ def dashboard():
         if app.config['OPENVERSE_API_KEY']:
             headers['Authorization'] = f"Bearer {app.config['OPENVERSE_API_KEY']}"
 
-        # fetch images
         img_res = requests.get(f"{app.config['OPENVERSE_BASE_URL']}/images/?q={query}", headers=headers)
         if img_res.ok:
             images = img_res.json().get('results', [])
 
-        # fetch audio
         aud_res = requests.get(f"{app.config['OPENVERSE_BASE_URL']}/audio/?q={query}", headers=headers)
         if aud_res.ok:
             audio = aud_res.json().get('results', [])
